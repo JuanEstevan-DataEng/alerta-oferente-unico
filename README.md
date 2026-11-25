@@ -11,12 +11,9 @@ Curso Inteligencia Artificial (535212), UAO, 2026-2S · Dilian Mayerly Madroñer
 
 ## Arquitectura
 
-```
-API SECOP II ──► bronze ──► silver (Apache Spark) ──► gold ──► FastAPI + web
-(p6dx-8zbt)     crudo por   versión más reciente,     historial sin fuga, LightGBM + TF-IDF,
-                ingesta     consolidación, variables  calibración, pares, SHAP
-                            del EDA
-```
+![Arquitectura del despliegue](docs/arquitectura.png)
+
+El diagrama se regenera con `python docs/crear_diagrama.py` (logos oficiales en `docs/logos/`).
 
 | Componente | Archivo | Qué hace |
 |---|---|---|
