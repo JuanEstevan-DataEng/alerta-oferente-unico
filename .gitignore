@@ -7,3 +7,7 @@ spark-warehouse/
 metastore_db/
 derby.log
 .env
+
+# Generador del diagrama y logos (solo locales)
+docs/crear_diagrama.py
+docs/logos/

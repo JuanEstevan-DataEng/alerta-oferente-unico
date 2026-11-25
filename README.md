@@ -13,8 +13,6 @@ Curso Inteligencia Artificial (535212), UAO, 2026-2S · Dilian Mayerly Madroñer
 
 ![Arquitectura del despliegue](docs/arquitectura.png)
 
-El diagrama se regenera con `python docs/crear_diagrama.py` (logos oficiales en `docs/logos/`).
-
 | Componente | Archivo | Qué hace |
 |---|---|---|
 | Entrenamiento | `entregable_3_IA.ipynb` (Colab, GPU T4) | Selecciona el modelo (E4) y exporta `artefactos/` |
