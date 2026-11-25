@@ -55,6 +55,8 @@ async def ciclo_de_vida(_):
         from pipeline.sincronizar import descargar
         await asyncio.to_thread(descargar, HF_DATASET, LAKEHOUSE, ["gold", "estado"])
     tarea = asyncio.create_task(_sincronizar_periodicamente()) if HF_DATASET else None
+    # Precarga del modelo en segundo plano: el primer uso del simulador no espera la carga
+    asyncio.create_task(asyncio.to_thread(puntuador))
     yield
     if tarea:
         tarea.cancel()
