@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alerta temprana de oferente único</title>
+  <link rel="stylesheet" href="/static/estilos.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%23b4472e'/><text x='16' y='22' font-size='18' text-anchor='middle' fill='white' font-family='sans-serif'>1</text></svg>">
+</head>
+<body>
+<header class="cabecera">
+  <div class="marca">
+    <span class="logo" aria-hidden="true">1</span>
+    <div>
+      <h1>Alerta temprana de oferente único</h1>
+      <p>Contratación pública colombiana · SECOP II</p>
+    </div>
+  </div>
+  <nav class="pestanas" role="tablist">
+    <button role="tab" data-vista="vigentes" aria-selected="true">Alertas de la semana</button>
+    <button role="tab" data-vista="2026">Evaluación 2026</button>
+    <button role="tab" data-vista="simulador">Simulador</button>
+    <button role="tab" data-vista="como">Cómo funciona</button>
+  </nav>
+</header>
+
+<div class="aviso" role="note">
+  <strong>Priorizar, no señalar.</strong> El riesgo indica la probabilidad de que un proceso reciba <em>una sola oferta</em>.
+  No es evidencia de corrupción ni de ninguna falta: es una sugerencia de revisión humana.
+</div>
+
+<main>
+  <!-- Alertas (vigentes y evaluación 2026 comparten la misma vista) -->
+  <section id="vista-lista" class="vista">
+    <div class="kpis" id="kpis"></div>
+    <p class="explicacion" id="explicacion-lista"></p>
+    <form class="filtros" id="filtros" onsubmit="return false">
+      <label>Buscar <input type="search" id="f-buscar" placeholder="Entidad, municipio u objeto"></label>
+      <label>Departamento <select id="f-departamento"><option value="">Todos</option></select></label>
+      <label>Modalidad <select id="f-modalidad"><option value="">Todas</option></select></label>
+      <label class="casilla"><input type="checkbox" id="f-alertas"> Solo alertas</label>
+      <a class="boton secundario" id="descargar" href="#">Descargar CSV</a>
+    </form>
+    <div class="tabla-envoltura">
+      <table class="tabla">
+        <thead><tr id="encabezado"></tr></thead>
+        <tbody id="filas"></tbody>
+      </table>
+    </div>
+    <div class="paginacion">
+      <button class="boton secundario" id="anterior">Anterior</button>
+      <span id="pagina-info"></span>
+      <button class="boton secundario" id="siguiente">Siguiente</button>
+    </div>
+  </section>
+
+  <!-- Simulador -->
+  <section id="vista-simulador" class="vista" hidden>
+    <div class="simulador">
+      <form id="form-simulador" class="tarjeta">
+        <h2>Puntuar un proceso hipotético</h2>
+        <p class="tenue">El modelo se ejecuta en vivo con el historial vigente de la entidad, como si el proceso se publicara hoy.</p>
+        <label>Entidad <input name="entidad" required value="MUNICIPIO DE LABRANZAGRANDE"></label>
+        <div class="dos">
+          <label>Departamento <input name="departamento_entidad" required value="Boyacá"></label>
+          <label>Municipio <input name="ciudad_entidad" required value="No Definido"></label>
+        </div>
+        <div class="dos">
+          <label>Modalidad
+            <select name="modalidad_de_contratacion">
+              <option>Mínima cuantía</option><option>Selección Abreviada de Menor Cuantía</option>
+              <option>Selección abreviada subasta inversa</option><option>Licitación pública</option>
+              <option>Licitación pública Obra Publica</option><option>Concurso de méritos abierto</option>
+            </select></label>
+          <label>Tipo de contrato
+            <select name="tipo_de_contrato">
+              <option>Suministros</option><option>Prestación de servicios</option><option>Compraventa</option>
+              <option>Obra</option><option>Consultoría</option><option>Interventoría</option><option>Arrendamiento de muebles</option>
+            </select></label>
+        </div>
+        <div class="tres">
+          <label>Precio base (COP) <input name="precio_base" type="number" min="1" required value="80000000"></label>
+          <label>Días para ofertar <input name="dias_para_ofertar" type="number" min="0" value="3"></label>
+          <label>Duración (días) <input name="duracion_dias" type="number" min="0" value="60"></label>
+        </div>
+        <div class="dos">
+          <label>Código UNSPSC <input name="codigo_principal_de_categoria" value="V1.15101505"></label>
+          <label>Orden <select name="ordenentidad"><option>Territorial</option><option>Nacional</option><option>Corporación Autónoma</option></select></label>
+        </div>
+        <label>Objeto del contrato
+          <textarea name="descripcion" rows="3" required>Suministro de combustible para la maquinaria amarilla y el parque automotor del municipio</textarea></label>
+        <button class="boton" type="submit">Calcular riesgo</button>
+      </form>
+      <div id="resultado-simulador" class="tarjeta resultado vacio">
+        <p class="tenue">El resultado aparecerá aquí.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Cómo funciona -->
+  <section id="vista-como" class="vista" hidden>
+    <div class="tarjeta">
+      <h2>Arquitectura del despliegue</h2>
+      <div class="flujo" aria-label="Flujo de datos">
+        <div class="etapa fuente"><b>API SECOP II</b><span>datos.gov.co · p6dx-8zbt</span></div>
+        <div class="flecha" aria-hidden="true">→</div>
+        <div class="etapa bronze"><b>Bronze</b><span>registros crudos por fecha de ingesta (Parquet)</span></div>
+        <div class="flecha" aria-hidden="true">→</div>
+        <div class="etapa silver"><b>Silver · Apache Spark</b><span>versión más reciente, consolidación y variables del EDA</span></div>
+        <div class="flecha" aria-hidden="true">→</div>
+        <div class="etapa gold"><b>Gold</b><span>historial sin fuga, LightGBM + TF-IDF, calibración, pares, SHAP</span></div>
+        <div class="flecha" aria-hidden="true">→</div>
+        <div class="etapa app"><b>FastAPI + web</b><span>lista priorizada, ficha explicada, simulador</span></div>
+      </div>
+      <p class="tenue">El modelo se entrena una vez al año en Google Colab (GPU T4) y exporta sus artefactos. Cada semana el pipeline
+        consulta los procesos publicados y adjudicados, actualiza el historial de cada entidad con los resultados nuevos (sin reentrenar)
+        y puntúa los procesos que siguen recibiendo ofertas.</p>
+    </div>
+    <div class="metricas" id="metricas"></div>
+    <div class="tarjeta">
+      <h2>Validación prospectiva: semanas posteriores al entrenamiento</h2>
+      <p class="tenue">Para cada semana se simuló la ejecución del pipeline con la información disponible ese día y se comparó la lista
+        con el resultado que hoy ya se conoce.</p>
+      <div id="grafico-semanas"></div>
+    </div>
+    <div class="tarjeta alcance">
+      <div><h3>El sistema estima</h3><ul><li>La probabilidad de que un proceso reciba una sola oferta, con la información del día de su publicación.</li>
+        <li>Un orden de prioridad para la revisión humana.</li><li>Los factores asociados a una menor competencia esperada.</li></ul></div>
+      <div><h3>El sistema no estima</h3><ul><li>Si un proceso es corrupto.</li><li>Si una entidad o un funcionario incurrió en una falta.</li>
+        <li>Si existió direccionamiento, fraude o ilegalidad.</li></ul></div>
+    </div>
+  </section>
+</main>
+
+<aside id="ficha" class="ficha" hidden aria-label="Detalle del proceso">
+  <button class="cerrar" id="cerrar-ficha" aria-label="Cerrar">×</button>
+  <div id="ficha-contenido"></div>
+</aside>
+<div id="velo" class="velo" hidden></div>
+
+<footer>Inteligencia Artificial (535212) · Universidad Autónoma de Occidente · 2026-2S ·
+  Dilian Mayerly Madroñero Ortega y Juan Estevan Viera Cano · <a href="/docs">API</a></footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

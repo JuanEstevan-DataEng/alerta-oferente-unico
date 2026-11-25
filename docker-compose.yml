@@ -1,0 +1,33 @@
+# Ejecución local del despliegue.
+#   docker compose up -d app                        # solo la aplicación (≈ 300 MB de RAM)
+#   docker compose --profile pipeline run --rm pipeline   # ejecución semanal con Spark
+services:
+  app:
+    build: .
+    image: oferente-unico-app:3.0
+    ports:
+      - "8000:7860"
+    volumes:
+      - ./lakehouse:/home/usuario/app/lakehouse   # usa el lakehouse local actualizado por el pipeline
+    mem_limit: 1g
+    restart: unless-stopped
+
+  pipeline:
+    profiles: ["pipeline"]
+    image: oferente-unico-pipeline:3.0
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM python:3.12-slim
+        RUN apt-get update && apt-get install -y --no-install-recommends openjdk-21-jre-headless libgomp1 \
+            && rm -rf /var/lib/apt/lists/*
+        WORKDIR /despliegue
+        COPY requirements-app.txt requirements-pipeline.txt ./
+        RUN pip install --no-cache-dir -r requirements-pipeline.txt
+        COPY oferente_unico/ oferente_unico/
+        COPY pipeline/ pipeline/
+        COPY artefactos/ artefactos/
+        CMD ["python", "pipeline/ejecutar_semana.py"]
+    volumes:
+      - ./lakehouse:/despliegue/lakehouse
+    mem_limit: 3g

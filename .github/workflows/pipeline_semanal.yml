@@ -1,0 +1,39 @@
+# Ejecución semanal del pipeline medallón (bronze -> silver con Spark -> gold).
+# Secretos del repositorio: HF_TOKEN (escritura en Hugging Face). Variable: HF_DATASET.
+name: Pipeline semanal SECOP II
+
+on:
+  schedule:
+    - cron: "0 11 * * 1"   # lunes 06:00 hora de Colombia
+  workflow_dispatch:
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_DATASET: ${{ vars.HF_DATASET }}
+      SOCRATA_APP_TOKEN: ${{ secrets.SOCRATA_APP_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Dependencias
+        run: pip install -r requirements-pipeline.txt
+      - name: Descargar lakehouse (bronze y estado)
+        run: python pipeline/sincronizar.py descargar --capas bronze estado gold
+      - name: Ejecutar bronze -> silver (Spark) -> gold
+        run: python pipeline/ejecutar_semana.py --motor spark
+      - name: Validación prospectiva
+        run: python pipeline/validacion_prospectiva.py
+      - name: Pruebas
+        run: pytest -q
+      - name: Publicar lakehouse
+        run: python pipeline/sincronizar.py subir --capas bronze gold estado

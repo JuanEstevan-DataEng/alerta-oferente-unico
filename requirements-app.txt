@@ -1,0 +1,10 @@
+# Aplicación web e inferencia (mismas versiones del entrenamiento en Colab: los .joblib no son portables)
+fastapi==0.165.0
+uvicorn[standard]==0.54.0
+pandas==2.2.3
+numpy>=2.0,<2.4
+pyarrow==26.0.1
+scikit-learn==1.6.1
+lightgbm==4.6.0
+joblib>=1.4
+huggingface_hub>=0.25
