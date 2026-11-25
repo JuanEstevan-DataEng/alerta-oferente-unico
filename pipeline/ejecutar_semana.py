@@ -30,7 +30,7 @@ from pipeline.ingesta import ingerir  # noqa: E402
 def silver_pandas(lakehouse):
     partes = []
     for tipo in ("publicados", "adjudicados"):
-        for archivo in sorted((Path(lakehouse) / "bronze" / tipo).glob("fecha_ingesta=*/parte.parquet")):
+        for archivo in sorted((Path(lakehouse) / "bronze" / tipo).glob("fecha_ingesta=*/*.parquet")):
             partes.append(pd.read_parquet(archivo).assign(fecha_ingesta=archivo.parent.name.split("=")[1]))
     crudo = pd.concat(partes, ignore_index=True)
     ultima = crudo.groupby("id_del_proceso")["fecha_ingesta"].transform("max")

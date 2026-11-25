@@ -26,8 +26,10 @@ def descargar(repo, lakehouse, capas):
 def subir(repo, lakehouse, capas, mensaje="Actualización semanal del lakehouse"):
     api = HfApi(token=os.environ.get("HF_TOKEN"))
     api.create_repo(repo, repo_type="dataset", private=False, exist_ok=True)
+    # Espejo de cada capa: lo que ya no existe en local se elimina del repositorio en el mismo commit
     api.upload_folder(repo_id=repo, repo_type="dataset", folder_path=str(lakehouse),
-                      allow_patterns=[f"{c}/**" for c in capas], commit_message=mensaje)
+                      allow_patterns=[f"{c}/**" for c in capas], delete_patterns=[f"{c}/**" for c in capas],
+                      commit_message=mensaje)
 
 
 if __name__ == "__main__":

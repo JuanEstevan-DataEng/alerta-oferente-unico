@@ -3,8 +3,11 @@
 Se guardan los registros tal como llegan (texto), particionados por tipo de consulta y fecha de
 ingesta, en formato Parquet:
 
-    lakehouse/bronze/publicados/fecha_ingesta=AAAA-MM-DD/parte.parquet   procesos publicados
-    lakehouse/bronze/adjudicados/fecha_ingesta=AAAA-MM-DD/parte.parquet  procesos adjudicados
+    lakehouse/bronze/publicados/fecha_ingesta=AAAA-MM-DD/desde_X_hasta_Y.parquet   procesos publicados
+    lakehouse/bronze/adjudicados/fecha_ingesta=AAAA-MM-DD/desde_X_hasta_Y.parquet  procesos adjudicados
+
+Un archivo por consulta: dos ingestas el mismo día (p. ej. una recuperación y la semanal) no se
+sobrescriben. Si un proceso aparece en varias, silver conserva la versión de la ingesta más reciente.
 
 Los publicados son los que se puntúan; los adjudicados actualizan el historial de las entidades.
 """
@@ -78,7 +81,7 @@ def ingerir(lakehouse, desde, hasta, fecha_ingesta):
         datos = descargar(filtro(desde, hasta))
         destino = Path(lakehouse) / "bronze" / tipo / f"fecha_ingesta={fecha_ingesta}"
         destino.mkdir(parents=True, exist_ok=True)
-        datos.to_parquet(destino / "parte.parquet", index=False)
+        datos.to_parquet(destino / f"desde_{desde}_hasta_{hasta}.parquet", index=False)
         resumen[tipo] = len(datos)
         print(f"  bronze/{tipo}: {len(datos):,} registros ({desde} a {hasta}) en {time.time() - inicio:.0f} s")
     return resumen
