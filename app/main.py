@@ -50,6 +50,10 @@ async def _sincronizar_periodicamente():
 @asynccontextmanager
 async def ciclo_de_vida(_):
     import asyncio
+    if HF_DATASET and not (LAKEHOUSE / "gold" / "alertas_vigentes.parquet").exists():
+        # Primer arranque sin datos locales: se espera la descarga antes de atender solicitudes
+        from pipeline.sincronizar import descargar
+        await asyncio.to_thread(descargar, HF_DATASET, LAKEHOUSE, ["gold", "estado"])
     tarea = asyncio.create_task(_sincronizar_periodicamente()) if HF_DATASET else None
     yield
     if tarea:
@@ -180,10 +184,16 @@ def proceso(id_del_proceso: str, conjunto: str = "vigentes"):
 def descargar(conjunto: str = "vigentes", departamento: Optional[str] = None, modalidad: Optional[str] = None,
               solo_alertas: bool = False, buscar: Optional[str] = None):
     df = filtrar(datos(conjunto), departamento, modalidad, solo_alertas, buscar)
-    buffer = io.StringIO()
-    df.to_csv(buffer, index=False)
+
+    def bloques(tamano=5000):
+        # Se envía por bloques para no materializar el archivo completo en memoria
+        for inicio in range(0, max(len(df), 1), tamano):
+            buffer = io.StringIO()
+            df.iloc[inicio:inicio + tamano].to_csv(buffer, index=False, header=inicio == 0)
+            yield (("﻿" if inicio == 0 else "") + buffer.getvalue()).encode("utf-8")
+
     nombre = f"alertas_oferente_unico_{conjunto}.csv"
-    return StreamingResponse(iter([buffer.getvalue().encode("utf-8-sig")]), media_type="text/csv",
+    return StreamingResponse(bloques(), media_type="text/csv",
                              headers={"Content-Disposition": f'attachment; filename="{nombre}"'})
 
 

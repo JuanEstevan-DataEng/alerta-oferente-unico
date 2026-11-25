@@ -6,7 +6,7 @@ según su probabilidad de recibir **una sola oferta**, con la explicación de ca
 
 Curso Inteligencia Artificial (535212), UAO, 2026-2S · Dilian Mayerly Madroñero Ortega y Juan Estevan Viera Cano.
 
-- **Aplicación:** https://huggingface.co/spaces/JuanEstevan-DataEng/alerta-oferente-unico
+- **Aplicación (Render):** https://alerta-oferente-unico.onrender.com
 - **Lakehouse (bronze, gold, estado):** https://huggingface.co/datasets/JuanEstevan-DataEng/secop-oferente-unico-lakehouse
 
 ## Arquitectura
@@ -27,6 +27,7 @@ API SECOP II ──► bronze ──► silver (Apache Spark) ──► gold ─
 | Gold | `oferente_unico/puntuacion.py` | Puntaje, calibración, riesgo de pares, factores SHAP (TreeSHAP nativo de LightGBM) |
 | Orquestación | `pipeline/ejecutar_semana.py`, `.github/workflows/pipeline_semanal.yml`, `pipeline/dags/` | Ejecución semanal (GitHub Actions o Airflow) |
 | Lakehouse remoto | `pipeline/sincronizar.py` | Repositorio de datos de Hugging Face como almacenamiento de objetos |
+| Hosting | `Dockerfile`, `render.yaml` | Render (Docker, plan gratuito): descarga gold y estado al arrancar y cada hora |
 | Aplicación | `app/` | API FastAPI y página web: lista, ficha, evaluación 2026, simulador |
 
 ## Uso local
@@ -42,7 +43,7 @@ HF_DATASET=JuanEstevan-DataEng/secop-oferente-unico-lakehouse .venv/bin/python p
 .venv/bin/uvicorn app.main:app --port 8000                        # http://localhost:8000
 ```
 
-Con Docker: `docker compose up -d app` (≈ 430 MB de RAM) y `docker compose --profile pipeline run --rm pipeline`.
+Con Docker: `docker compose up -d app` (≈ 330–430 MB de RAM; cabe en el plan gratuito de Render, 512 MB) y `docker compose --profile pipeline run --rm pipeline`.
 
 ## Verificación
 

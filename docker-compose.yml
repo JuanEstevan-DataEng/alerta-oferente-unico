@@ -9,6 +9,8 @@ services:
       - "8000:7860"
     volumes:
       - ./lakehouse:/home/usuario/app/lakehouse   # usa el lakehouse local actualizado por el pipeline
+    environment:
+      - HF_DATASET=   # vacío: no sincroniza, usa solo el lakehouse local
     mem_limit: 1g
     restart: unless-stopped
 

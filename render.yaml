@@ -1,0 +1,13 @@
+# Blueprint de Render: aplicación web en Docker, plan gratuito, despliegue automático con cada push.
+services:
+  - type: web
+    name: alerta-oferente-unico
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /salud
+    autoDeploy: true
+    envVars:
+      - key: HF_DATASET
+        value: JuanEstevan-DataEng/secop-oferente-unico-lakehouse
