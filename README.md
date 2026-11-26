@@ -44,10 +44,20 @@ Con Docker: `docker compose up -d app` (≈ 330–430 MB de RAM; cabe en el plan
 
 | Prueba | Resultado |
 |---|---|
-| `tests/verificar_contra_notebook.py`: el paquete reproduce el notebook en los 40 589 procesos de 2026 | 100 % en riesgo, pares, alertas y factores |
+| `tests/verificar_contra_notebook.py`: el paquete reproduce el notebook en los 40 589 procesos de 2026 | 100 % en riesgo, pares, alertas (umbral del modelo) y factores |
 | `tests/test_silver_spark.py`: silver en Spark igual a la versión pandas | 100 % en 16 columnas |
-| `tests/test_api.py`: API web | 7 pruebas |
+| `tests/test_api.py`: API web (orden, nuevos, búsqueda, municipio, alerta = riesgo mostrado ≥ umbral) | 18 pruebas |
 | `pipeline/validacion_prospectiva.py`: semanas posteriores al entrenamiento | PR-AUC 0,783 en 7 210 procesos; precisión de las 50 primeras alertas 0,86–0,96 |
+
+## Cambios tras la validación con la usuaria (26-nov-2026)
+
+| Hallazgo | Cambio |
+|---|---|
+| Al buscar «Cali» aparecían Bugalagrande («**cali**dad») y Buenaventura («lo**cali**zado») | El buscador encuentra palabras completas y no distingue tildes; filtro de **municipio** (texto libre con sugerencias del departamento) |
+| No entendía qué eran los «pares» | La columna se llama «Lo normal en similares» y el orden por defecto, «Más fuera de lo normal» |
+| Creía que el riesgo sube con los días hasta llegar a 100 | Aviso y ficha: el riesgo no es una cuenta regresiva |
+| Pidió que la página explique para qué sirve | Guía rápida de 8 pasos que oscurece la página e ilumina cada herramienta (botón «Guía rápida»; `?guia=0` la desactiva y `?guia=N` abre el paso N) |
+| Procesos con el mismo riesgo mostrado (65,6 %) quedaban unos con alerta y otros sin ella | La alerta usa el umbral de alta precisión llevado a la escala calibrada: alerta = riesgo mostrado ≥ 65,6 % |
 
 ## Mantenimiento
 

@@ -51,6 +51,10 @@ class Puntuador:
         self.vars_texto = self.meta["variables_texto"]
         self.peso, self.p0, self.m_suav = self.meta["peso_pos"], self.meta["p0"], self.meta["m_suav"]
         self.umbral_alerta = self.meta["umbral_alerta"]
+        # El mismo umbral expresado en la escala que ve el usuario (probabilidad calibrada). La isotónica es
+        # escalonada: con el umbral sobre la probabilidad corregida, procesos con el mismo porcentaje mostrado
+        # podían quedar unos con alerta y otros sin ella. Con este umbral, alerta = riesgo mostrado ≥ umbral.
+        self.umbral_alerta_riesgo = float(self.calibrador.predict(np.array([self.umbral_alerta]))[0])
         self._cargar_estado()
 
     # ------------------------------------------------------------------ estado
@@ -228,6 +232,9 @@ class Puntuador:
         return X, d, {"puntaje": puntaje, "prob": prob, "prob_cal": prob_cal, "riesgo_pares": pares,
                       "prioridad": prioridad}
 
+    def es_alerta(self, prob_cal):
+        return np.asarray(prob_cal) >= self.umbral_alerta_riesgo
+
     # --------------------------------------------------------------- explicación
     def _describir(self, variable, valor):
         nombre = self.meta["nombres_legibles"].get(variable, variable)
@@ -288,7 +295,7 @@ class Puntuador:
             "riesgo_pct": (np.clip(r["prob_cal"], 0.01, 0.99) * 100).round(1),
             "riesgo_pares_pct": (r["riesgo_pares"] * 100).round(1),
             "puntaje_prioridad": np.round(r["prioridad"], 4),
-            "alerta": r["prob"] >= self.umbral_alerta,
+            "alerta": self.es_alerta(r["prob_cal"]),
             "factores": factores,
             "terminos_clave": terminos,
             "url": d["urlproceso"].to_numpy() if "urlproceso" in d else None,

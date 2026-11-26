@@ -13,7 +13,7 @@
     <span class="logo" aria-hidden="true">1</span>
     <div>
       <h1>Alerta temprana de oferente único</h1>
-      <p>Contratación pública colombiana · SECOP II</p>
+      <p>Para veedurías, personerías y ciudadanía · contratación pública en SECOP II</p>
     </div>
   </div>
   <nav class="pestanas" role="tablist">
@@ -22,11 +22,13 @@
     <button role="tab" data-vista="simulador">Simulador</button>
     <button role="tab" data-vista="como">Cómo funciona</button>
   </nav>
+  <button class="boton-guia" id="abrir-guia" type="button"><span aria-hidden="true">?</span> Guía rápida</button>
 </header>
 
 <div class="aviso" role="note">
   <strong>Priorizar, no señalar.</strong> El riesgo indica la probabilidad de que un proceso reciba <em>una sola oferta</em>.
   No es evidencia de corrupción ni de ninguna falta: es una sugerencia de revisión humana.
+  El riesgo no es una cuenta regresiva: no sube con el paso de los días.
 </div>
 
 <main>
@@ -35,18 +37,20 @@
     <div class="kpis" id="kpis"></div>
     <p class="explicacion" id="explicacion-lista"></p>
     <form class="filtros" id="filtros" onsubmit="return false">
-      <label>Buscar <input type="search" id="f-buscar" placeholder="Entidad, municipio u objeto"></label>
-      <label>Departamento <select id="f-departamento"><option value="">Todos</option></select></label>
+      <label id="campo-departamento">Departamento <select id="f-departamento"><option value="">Todos</option></select></label>
+      <label id="campo-municipio">Municipio <input type="search" id="f-municipio" list="municipios" placeholder="Escribe o elige" autocomplete="off"></label>
+      <datalist id="municipios"></datalist>
+      <label id="campo-buscar">Buscar <input type="search" id="f-buscar" placeholder="Palabra de la entidad u objeto"></label>
       <label>Modalidad <select id="f-modalidad"><option value="">Todas</option></select></label>
-      <label>Ordenar por
+      <label id="campo-orden">Ordenar por
         <select id="f-orden">
-          <option value="prioridad">Prioridad frente a pares</option>
+          <option value="prioridad">Más fuera de lo normal (recomendado)</option>
           <option value="riesgo">Riesgo de oferente único</option>
           <option value="precio">Precio base</option>
           <option value="monto">Monto en juego (riesgo × precio)</option>
         </select>
       </label>
-      <label class="casilla"><input type="checkbox" id="f-alertas"> Solo alertas</label>
+      <label class="casilla" id="casilla-alertas"><input type="checkbox" id="f-alertas"> Solo alertas</label>
       <label class="casilla" id="casilla-nuevos"><input type="checkbox" id="f-nuevos"> Solo nuevos de hoy</label>
       <a class="boton secundario" id="descargar" href="#">Descargar CSV</a>
     </form>
@@ -150,5 +154,6 @@
 <footer>Inteligencia Artificial (535212) · Universidad Autónoma de Occidente · 2026-2S ·
   Dilian Mayerly Madroñero Ortega y Juan Estevan Viera Cano · <a href="/docs">API</a></footer>
 <script src="/static/app.js"></script>
+<script src="/static/guia.js"></script>
 </body>
 </html>

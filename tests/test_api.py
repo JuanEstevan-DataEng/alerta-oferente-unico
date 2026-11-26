@@ -90,3 +90,36 @@ def test_solo_nuevos():
     nuevos = cliente.get("/api/alertas", params={"solo_nuevos": True, "tamano": 200}).json()
     assert nuevos["total"] <= todos["total"]
     assert all(x["nuevo"] for x in nuevos["registros"])
+
+
+def test_busqueda_por_palabra_completa():
+    """«cali» no debe encontrar «calidad», «localizado» ni «Calima» (hallazgo de la validación con la usuaria)."""
+    datos = cliente.get("/api/alertas", params={"buscar": "cali", "tamano": 200}).json()["registros"]
+    import re
+    for x in datos:
+        texto = f"{x['entidad']} {x['municipio']} {x['objeto']}".lower()
+        assert re.search(r"(?<!\w)cali(?!\w)", texto), texto[:120]
+
+
+def test_busqueda_sin_tildes():
+    con = cliente.get("/api/alertas", params={"conjunto": "2026", "buscar": "Bogotá"}).json()["total"]
+    sin = cliente.get("/api/alertas", params={"conjunto": "2026", "buscar": "bogota"}).json()["total"]
+    assert con == sin > 0
+
+
+def test_filtro_de_municipio():
+    municipios = cliente.get("/api/filtros", params={"conjunto": "2026", "departamento": "Valle del Cauca"}).json()["municipios"]
+    assert "Cali" in municipios and "No Definido" not in municipios
+    for escrito in ["Cali", "santiago de cali"]:
+        datos = cliente.get("/api/alertas", params={"conjunto": "2026", "municipio": escrito, "tamano": 200}).json()
+        assert datos["total"] > 0 and {x["municipio"] for x in datos["registros"]} == {"Cali"}
+
+
+@pytest.mark.parametrize("conjunto", ["vigentes", "2026"])
+def test_alerta_coincide_con_el_riesgo_mostrado(conjunto):
+    """Una sola métrica para el usuario: tiene alerta todo proceso con riesgo mostrado ≥ umbral, y ninguno por debajo."""
+    umbral = cliente.get("/api/resumen").json()["vigentes"]["umbral_alerta_riesgo_pct"]
+    datos = cliente.get("/api/alertas", params={"conjunto": conjunto, "orden": "riesgo", "tamano": 200, "pagina": 2}).json()["registros"]
+    assert all(x["alerta"] == (x["riesgo_pct"] >= umbral) for x in datos)
+    ficha = cliente.get(f"/api/proceso/{datos[0]['id_del_proceso']}", params={"conjunto": conjunto}).json()
+    assert "_texto" not in ficha and "_municipio" not in ficha

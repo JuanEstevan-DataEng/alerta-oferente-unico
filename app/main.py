@@ -9,12 +9,15 @@ Variables de entorno: LAKEHOUSE (carpeta del lakehouse) y ARTEFACTOS (carpeta de
 import io
 import json
 import os
+import re
 import sys
+import unicodedata
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Optional
 
+import joblib
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
@@ -82,8 +85,31 @@ Orden = Literal["prioridad", "riesgo", "precio", "monto"]
 COLUMNA_ORDEN = {"riesgo": "riesgo_pct", "precio": "precio_base", "monto": "monto_en_juego"}
 
 
+# Columnas auxiliares para filtrar (texto sin tildes ni mayúsculas); no se envían al usuario
+OCULTAS = ["_texto", "_municipio"]
+
+
 def _firma(ruta):
     return ruta.stat().st_mtime if ruta.exists() else 0
+
+
+def normalizar(serie):
+    """Minúsculas y sin tildes, para que «Bogota» encuentre «Bogotá»."""
+    return (serie.fillna("").astype(str).str.normalize("NFKD")
+            .str.encode("ascii", "ignore").str.decode("ascii").str.lower().str.replace(r"\s+", " ", regex=True))
+
+
+def _normalizar_texto(texto):
+    texto = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode("ascii")
+    return " ".join(texto.lower().split())
+
+
+@lru_cache(maxsize=1)
+def umbral_riesgo_pct():
+    """Umbral de alerta en la escala que ve el usuario: el umbral de alta precisión llevado a la probabilidad calibrada."""
+    meta = _json(ARTEFACTOS / "metadatos.json", {})
+    calibrador = joblib.load(ARTEFACTOS / "calibrador_isotonico.joblib")
+    return round(float(calibrador.predict(np.array([meta["umbral_alerta"]]))[0]) * 100, 1)
 
 
 @lru_cache(maxsize=4)
@@ -91,7 +117,17 @@ def _leer(nombre, firma):
     ruta = LAKEHOUSE / "gold" / nombre
     if not ruta.exists():
         return pd.DataFrame()
-    return pd.read_parquet(ruta)
+    df = pd.read_parquet(ruta)
+    # Una sola métrica para el usuario: tiene alerta todo proceso cuyo riesgo mostrado alcance el umbral
+    # (la evaluación 2026 viene del notebook, que aplicaba el umbral a la probabilidad sin calibrar)
+    df["alerta"] = df["riesgo_pct"] >= umbral_riesgo_pct()
+    df["_texto"] = normalizar(df["entidad"] + " | " + df["municipio"].fillna("") + " | " + df["objeto"].fillna(""))
+    df["_municipio"] = normalizar(df["municipio"])
+    return df
+
+
+def visibles(df):
+    return df.drop(columns=[c for c in OCULTAS if c in df.columns])
 
 
 def datos(conjunto):
@@ -127,20 +163,25 @@ def ordenar(df, orden="prioridad"):
     return df.sort_values([COLUMNA_ORDEN[orden], "prioridad"], ascending=[False, True], na_position="last", kind="stable")
 
 
-def filtrar(df, departamento, modalidad, solo_alertas, buscar, solo_nuevos=False):
+def filtrar(df, departamento, modalidad, solo_alertas, buscar, solo_nuevos=False, municipio=None):
     if departamento:
         df = df[df["departamento"] == departamento]
+    if municipio and _normalizar_texto(municipio):
+        # Igual al municipio, o el municipio como palabra completa dentro de lo escrito («Santiago de Cali» → Cali)
+        q = _normalizar_texto(municipio)
+        validos = {m for m in df["_municipio"].unique()
+                   if m == q or (m and m != "no definido" and re.search(rf"(?<!\w){re.escape(m)}(?!\w)", q))}
+        df = df[df["_municipio"].isin(validos)]
     if modalidad:
         df = df[df["modalidad"] == modalidad]
     if solo_alertas:
         df = df[df["alerta"]]
     if solo_nuevos and "nuevo" in df.columns:
         df = df[df["nuevo"]]
-    if buscar:
-        patron = buscar.strip().lower()
-        df = df[df["entidad"].str.lower().str.contains(patron, regex=False)
-                | df["objeto"].str.lower().str.contains(patron, regex=False)
-                | df["municipio"].str.lower().str.contains(patron, regex=False)]
+    if buscar and _normalizar_texto(buscar):
+        # Palabra o frase completa: «cali» ya no encuentra «calidad», «localizado» ni «Calima»
+        patron = rf"(?<!\w){re.escape(_normalizar_texto(buscar))}(?!\w)"
+        df = df[df["_texto"].str.contains(patron, regex=True)]
     return df
 
 
@@ -161,7 +202,8 @@ def resumen():
         "ejecucion": ejec,
         "vigentes": {"procesos": len(vig), "alertas": int(vig["alerta"].sum()) if len(vig) else 0,
                      "nuevos": int(vig["nuevo"].sum()) if "nuevo" in vig else None,
-                     "alertas_nuevas": int((vig["nuevo"] & vig["alerta"]).sum()) if "nuevo" in vig else None},
+                     "alertas_nuevas": int((vig["nuevo"] & vig["alerta"]).sum()) if "nuevo" in vig else None,
+                     "umbral_alerta_riesgo_pct": umbral_riesgo_pct()},
         "modelo": {"nombre": meta.get("modelo"), "fecha_corte_datos": meta.get("fecha_corte_datos"),
                    "metricas_prueba_2026": meta.get("metricas_prueba_2026"),
                    "puntos_operacion": meta.get("puntos_operacion_prueba_2026"),
@@ -172,19 +214,22 @@ def resumen():
 
 
 @app.get("/api/filtros")
-def filtros(conjunto: str = "vigentes"):
+def filtros(conjunto: str = "vigentes", departamento: Optional[str] = None):
     df = datos(conjunto)
     if df.empty:
-        return {"departamentos": [], "modalidades": []}
+        return {"departamentos": [], "modalidades": [], "municipios": []}
+    lugar = df[df["departamento"] == departamento] if departamento else df
     return {"departamentos": sorted(df["departamento"].dropna().unique().tolist()),
-            "modalidades": sorted(df["modalidad"].dropna().unique().tolist())}
+            "modalidades": sorted(df["modalidad"].dropna().unique().tolist()),
+            "municipios": sorted(m for m in lugar["municipio"].dropna().unique().tolist() if m != "No Definido")}
 
 
 @app.get("/api/alertas")
 def alertas(conjunto: str = "vigentes", departamento: Optional[str] = None, modalidad: Optional[str] = None,
             solo_alertas: bool = False, buscar: Optional[str] = None, orden: Orden = "prioridad",
-            solo_nuevos: bool = False, pagina: int = Query(1, ge=1), tamano: int = Query(25, ge=1, le=200)):
-    df = ordenar(filtrar(datos(conjunto), departamento, modalidad, solo_alertas, buscar, solo_nuevos), orden)
+            solo_nuevos: bool = False, municipio: Optional[str] = None,
+            pagina: int = Query(1, ge=1), tamano: int = Query(25, ge=1, le=200)):
+    df = ordenar(filtrar(datos(conjunto), departamento, modalidad, solo_alertas, buscar, solo_nuevos, municipio), orden)
     total = len(df)
     bloque = df.iloc[(pagina - 1) * tamano: pagina * tamano]
     cols = [c for c in COLUMNAS_LISTA if c in bloque.columns]
@@ -200,14 +245,15 @@ def proceso(id_del_proceso: str, conjunto: str = "vigentes"):
     fila = ordenar(df[df["id_del_proceso"] == id_del_proceso])
     if fila.empty:
         raise HTTPException(404, "Proceso no encontrado")
-    return _limpio(fila)[0]
+    return _limpio(visibles(fila))[0]
 
 
 @app.get("/api/descargar")
 def descargar(conjunto: str = "vigentes", departamento: Optional[str] = None, modalidad: Optional[str] = None,
               solo_alertas: bool = False, buscar: Optional[str] = None, orden: Orden = "prioridad",
-              solo_nuevos: bool = False):
-    df = ordenar(filtrar(datos(conjunto), departamento, modalidad, solo_alertas, buscar, solo_nuevos), orden)
+              solo_nuevos: bool = False, municipio: Optional[str] = None):
+    df = visibles(ordenar(filtrar(datos(conjunto), departamento, modalidad, solo_alertas, buscar, solo_nuevos,
+                                  municipio), orden))
 
     def bloques(tamano=5000):
         # Se envía por bloques para no materializar el archivo completo en memoria
@@ -251,7 +297,7 @@ def puntuar(p: ProcesoHipotetico):
     })
     gold = puntuador().gold(pd.DataFrame([registro]))
     salida = _limpio(gold)[0]
-    salida["umbral_alerta_pct"] = round(puntuador().umbral_alerta * 100, 1)
+    salida["umbral_alerta_pct"] = umbral_riesgo_pct()
     return salida
 
 

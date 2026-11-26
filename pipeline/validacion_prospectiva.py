@@ -55,7 +55,7 @@ def main():
         evaluable = semana["oferente_unico"].notna().to_numpy()  # hoy ya se conoce el resultado
         y = semana["oferente_unico"].to_numpy()[evaluable].astype(int)
         prob, prioridad = r["prob"][evaluable], r["prioridad"][evaluable]
-        alerta = prob >= p.umbral_alerta
+        alerta = p.es_alerta(r["prob_cal"][evaluable])
         filas.append({"ejecucion": str(ejecucion.date()), "publicados": len(semana), "con_resultado": int(evaluable.sum()),
                       "tasa_real": y.mean(), "PR-AUC": pr_auc(y, prob), "P@50": precision_en_k(y, prob, 50),
                       "P@50 pares": precision_en_k(y, prioridad, 50), "alertas": int(alerta.sum()),

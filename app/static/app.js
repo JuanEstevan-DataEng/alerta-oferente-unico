@@ -16,7 +16,9 @@ async function api(ruta, opciones) {
 function parametros() {
   const p = new URLSearchParams({ conjunto: estado.vista, pagina: estado.pagina, tamano: estado.tamano });
   const dep = $("#f-departamento").value, mod = $("#f-modalidad").value, q = $("#f-buscar").value.trim();
+  const mun = $("#f-municipio").value.trim();
   if (dep) p.set("departamento", dep);
+  if (mun) p.set("municipio", mun);
   if (mod) p.set("modalidad", mod);
   if (q) p.set("buscar", q);
   if ($("#f-alertas").checked) p.set("solo_alertas", "true");
@@ -53,7 +55,18 @@ async function cargarFiltros() {
     sel.innerHTML = `<option value="">${todos}</option>` + valores.map((v) => `<option>${esc(v)}</option>`).join("");
     sel.value = valores.includes(actual) ? actual : "";
   }
+  await cargarMunicipios();
 }
+
+// Sugerencias de municipio según el departamento elegido (también se puede escribir libremente)
+async function cargarMunicipios() {
+  const p = new URLSearchParams({ conjunto: estado.vista });
+  if ($("#f-departamento").value) p.set("departamento", $("#f-departamento").value);
+  const f = await api(`/api/filtros?${p}`);
+  $("#municipios").innerHTML = (f.municipios || []).map((m) => `<option value="${esc(m)}"></option>`).join("");
+}
+
+const umbralAlerta = () => (estado.resumen?.vigentes?.umbral_alerta_riesgo_pct ?? null);
 
 function pintarKpis(datos) {
   const r = estado.resumen;
@@ -62,13 +75,13 @@ function pintarKpis(datos) {
     const e = r.ejecucion || {};
     tarjetas = [
       [fmt.format(r.vigentes.procesos), "procesos que siguen recibiendo ofertas"],
-      [fmt.format(r.vigentes.alertas), "alertas (alta precisión)"],
+      [fmt.format(r.vigentes.alertas), `alertas (riesgo de ${pct(umbralAlerta())} o más)`],
       [r.vigentes.nuevos == null ? "—" : fmt.format(r.vigentes.nuevos),
        r.vigentes.alertas_nuevas == null ? "nuevos hoy" : `nuevos hoy · ${fmt.format(r.vigentes.alertas_nuevas)} con alerta`],
       [fmt.format(datos.total), "procesos con los filtros actuales"],
     ];
     $("#explicacion-lista").textContent = `Procesos competitivos sin adjudicar cuyo plazo para ofertar sigue abierto (actualizado el ${e.fecha_ejecucion || "—"}). ` +
-      TEXTO_ORDEN[$("#f-orden").value] + " La marca vertical de cada barra es el riesgo esperado de los pares.";
+      TEXTO_ORDEN[$("#f-orden").value] + " La rayita de cada barra marca lo normal en procesos similares.";
   } else {
     const m = r.modelo.metricas_prueba_2026 || {};
     tarjetas = [
@@ -85,7 +98,7 @@ function pintarKpis(datos) {
 
 // Qué significa cada orden (la columna # conserva la prioridad frente a pares)
 const TEXTO_ORDEN = {
-  prioridad: "Ordenados por riesgo relativo a procesos comparables (mismo segmento, modalidad, cuantía y tamaño de mercado).",
+  prioridad: "Primero los procesos cuyo riesgo más se sale de lo normal en procesos similares (mismo tipo de compra, modalidad, monto y tamaño del municipio).",
   riesgo: "Ordenados por la probabilidad calibrada de recibir una sola oferta.",
   precio: "Ordenados por precio base, de mayor a menor.",
   monto: "Ordenados por monto en juego: probabilidad de una sola oferta × precio base. Favorece a las entidades grandes.",
@@ -93,7 +106,7 @@ const TEXTO_ORDEN = {
 
 function barra(riesgo, pares) {
   return `<span class="cifra">${pct(riesgo)}</span>
-    <div class="barra" title="Riesgo ${pct(riesgo)} · pares ${pct(pares)}">
+    <div class="barra" title="Riesgo ${pct(riesgo)} · lo normal en procesos similares: ${pct(pares)}">
       <div class="valor" style="width:${riesgo}%"></div><div class="marca-pares" style="left:${pares}%"></div></div>`;
 }
 
@@ -103,7 +116,7 @@ async function cargarLista() {
   pintarKpis(datos);
   const conResultado = estado.vista === "2026";
   const verMonto = $("#f-orden").value === "monto";
-  $("#encabezado").innerHTML = ["#", "Entidad y lugar", "Objeto", "Modalidad", verMonto ? "Monto en juego" : "Precio base", "Riesgo", "Pares",
+  $("#encabezado").innerHTML = ["#", "Entidad y lugar", "Objeto", "Modalidad", verMonto ? "Monto en juego" : "Precio base", "Riesgo", "Lo normal en similares",
                                 conResultado ? "Resultado" : "Estado"]
     .map((t) => `<th>${t}</th>`).join("");
   $("#filas").innerHTML = datos.registros.map((r) => `
@@ -128,8 +141,11 @@ async function cargarLista() {
 }
 
 let espera;
-["#f-departamento", "#f-modalidad", "#f-orden", "#f-alertas", "#f-nuevos"].forEach((id) => $(id).addEventListener("change", () => { estado.pagina = 1; cargarLista(); }));
-$("#f-buscar").addEventListener("input", () => { clearTimeout(espera); espera = setTimeout(() => { estado.pagina = 1; cargarLista(); }, 300); });
+["#f-modalidad", "#f-orden", "#f-alertas", "#f-nuevos"].forEach((id) => $(id).addEventListener("change", () => { estado.pagina = 1; cargarLista(); }));
+$("#f-departamento").addEventListener("change", () => { estado.pagina = 1; cargarMunicipios(); cargarLista(); });
+for (const id of ["#f-buscar", "#f-municipio"]) {
+  $(id).addEventListener("input", () => { clearTimeout(espera); espera = setTimeout(() => { estado.pagina = 1; cargarLista(); }, 300); });
+}
 $("#anterior").addEventListener("click", () => { estado.pagina--; cargarLista(); });
 $("#siguiente").addEventListener("click", () => { estado.pagina++; cargarLista(); });
 $("#filas").addEventListener("click", (e) => { const tr = e.target.closest("tr[data-id]"); if (tr) abrirFicha(tr.dataset.id); });
@@ -140,17 +156,20 @@ function htmlFicha(p) {
   const factores = (p.factores || "").split(" | ").filter(Boolean);
   const terminos = (p.terminos_clave || "").split(", ").filter(Boolean);
   const diferencia = p.riesgo_pct - p.riesgo_pares_pct;
+  const umbral = p.umbral_alerta_pct ?? umbralAlerta();
   return `
     <p class="tenue">${p.prioridad ? `Prioridad #${p.prioridad} · ` : ""}${esc(p.id_del_proceso)}</p>
     <h2>${esc(p.entidad)}</h2>
     <p class="lugar">${esc(p.municipio)} · ${esc(p.departamento)} · ${esc(p.modalidad)}</p>
     <div class="comparacion">
       <div class="riesgo"><div class="tenue">Riesgo de oferente único</div><div class="grande">${pct(p.riesgo_pct, 0)}</div></div>
-      <div><div class="tenue">Riesgo esperado de sus pares</div><div class="grande">${pct(p.riesgo_pares_pct, 0)}</div></div>
+      <div><div class="tenue">Lo normal en procesos similares</div><div class="grande">${pct(p.riesgo_pares_pct, 0)}</div></div>
     </div>
-    <p>${diferencia > 15 ? `Su riesgo supera en <b>${Math.round(diferencia)} puntos</b> al de procesos comparables (mismo segmento, modalidad, cuantía y tamaño del mercado municipal).`
-                         : "Su riesgo es similar al de procesos comparables."}
-       ${p.alerta ? " Supera el umbral de alerta fijado para privilegiar la precisión." : ""}</p>
+    <p>${diferencia > 15 ? `Su riesgo es <b>mucho mayor</b> que lo normal en procesos similares (mismo tipo de compra, modalidad, monto y tamaño del municipio).`
+       : diferencia > 0 ? "Su riesgo es un poco mayor que lo normal en procesos similares."
+       : "Su riesgo es igual o menor que lo normal en procesos similares."}
+       ${p.alerta ? ` Tiene alerta porque su riesgo alcanza el umbral de ${pct(umbral)}.` : ""}</p>
+    <p class="tenue">El riesgo se calcula con lo que se sabía al publicarse el proceso y con el historial de la entidad. No es una cuenta regresiva: no sube con el paso de los días.</p>
     ${p.resultado_observado ? `<p>Resultado real: <b class="${p.resultado_observado === "1 oferta" ? "resultado-1" : "resultado-2"}">${esc(p.resultado_observado)}</b></p>` : ""}
     <h3>Factores que elevan el riesgo</h3>
     <ul class="factores">${factores.map((f) => `<li>${esc(f)}</li>`).join("") || "<li>Ningún factor eleva el riesgo sobre el promedio.</li>"}</ul>
@@ -194,7 +213,7 @@ $("#form-simulador").addEventListener("submit", async (e) => {
   try {
     const p = await api("/api/puntuar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(datos) });
     caja.innerHTML = htmlFicha({ ...p, prioridad: null, id_del_proceso: "Proceso simulado" }) +
-      `<p class="tenue">Umbral de alerta: ${pct(p.umbral_alerta_pct, 0)} de probabilidad corregida.</p>`;
+      `<p class="tenue">Umbral de alerta: riesgo de ${pct(p.umbral_alerta_pct)} o más.</p>`;
   } catch (err) {
     caja.innerHTML = `<p>No fue posible puntuar el proceso: ${esc(err.message)}</p>`;
   }
@@ -242,4 +261,7 @@ function graficoSemanas(s) {
   estado.resumen = await api("/api/resumen");
   await cargarFiltros();
   await cargarLista();
+  // ?guia=0 no abre la guía (capturas, demostraciones); ?guia=N la abre en el paso N
+  const pedida = new URLSearchParams(location.search).get("guia");
+  if (window.guia && pedida !== "0" && (pedida || !window.guia.vista())) window.guia.iniciar(Math.max(0, Number(pedida || 1) - 1));
 })();
