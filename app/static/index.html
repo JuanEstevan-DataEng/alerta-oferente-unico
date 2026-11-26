@@ -38,6 +38,14 @@
       <label>Buscar <input type="search" id="f-buscar" placeholder="Entidad, municipio u objeto"></label>
       <label>Departamento <select id="f-departamento"><option value="">Todos</option></select></label>
       <label>Modalidad <select id="f-modalidad"><option value="">Todas</option></select></label>
+      <label>Ordenar por
+        <select id="f-orden">
+          <option value="prioridad">Prioridad frente a pares</option>
+          <option value="riesgo">Riesgo de oferente único</option>
+          <option value="precio">Precio base</option>
+          <option value="monto">Monto en juego (riesgo × precio)</option>
+        </select>
+      </label>
       <label class="casilla"><input type="checkbox" id="f-alertas"> Solo alertas</label>
       <a class="boton secundario" id="descargar" href="#">Descargar CSV</a>
     </form>

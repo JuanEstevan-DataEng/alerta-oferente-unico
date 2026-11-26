@@ -13,7 +13,7 @@ import sys
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 import numpy as np
 import pandas as pd
@@ -69,8 +69,16 @@ app = FastAPI(title="Alerta temprana de oferente único — SECOP II",
 
 CONJUNTOS = {"vigentes": "alertas_vigentes.parquet", "2026": "evaluacion_2026.parquet"}
 COLUMNAS_LISTA = ["prioridad", "id_del_proceso", "fecha_publicacion", "entidad", "departamento", "municipio",
-                  "modalidad", "objeto", "precio_base", "riesgo_pct", "riesgo_pares_pct", "alerta",
+                  "modalidad", "objeto", "precio_base", "monto_en_juego", "riesgo_pct", "riesgo_pares_pct", "alerta",
                   "resultado_observado", "estado", "url"]
+
+# Criterios de orden de la lista. El modelo y la columna «prioridad» no cambian: solo se reordena la vista.
+#   prioridad  riesgo relativo a procesos comparables (pares), el orden con equidad territorial (por defecto)
+#   riesgo     probabilidad calibrada de recibir una sola oferta
+#   precio     precio base del proceso
+#   monto      monto en juego = probabilidad calibrada x precio base (riesgo ponderado por el valor del proceso)
+Orden = Literal["prioridad", "riesgo", "precio", "monto"]
+COLUMNA_ORDEN = {"riesgo": "riesgo_pct", "precio": "precio_base", "monto": "monto_en_juego"}
 
 
 def _firma(ruta):
@@ -108,6 +116,14 @@ def _json(ruta, defecto=None):
 def _limpio(registros):
     # NaN -> None para JSON
     return json.loads(pd.DataFrame(registros).to_json(orient="records", force_ascii=False))
+
+
+def ordenar(df, orden="prioridad"):
+    df = df.assign(monto_en_juego=(df["riesgo_pct"] / 100 * df["precio_base"]).round(0))
+    if orden == "prioridad":
+        return df.sort_values("prioridad", kind="stable")
+    # Empates (la calibración isotónica es escalonada) y faltantes: se resuelven con la prioridad frente a pares
+    return df.sort_values([COLUMNA_ORDEN[orden], "prioridad"], ascending=[False, True], na_position="last", kind="stable")
 
 
 def filtrar(df, departamento, modalidad, solo_alertas, buscar):
@@ -161,9 +177,9 @@ def filtros(conjunto: str = "vigentes"):
 
 @app.get("/api/alertas")
 def alertas(conjunto: str = "vigentes", departamento: Optional[str] = None, modalidad: Optional[str] = None,
-            solo_alertas: bool = False, buscar: Optional[str] = None,
+            solo_alertas: bool = False, buscar: Optional[str] = None, orden: Orden = "prioridad",
             pagina: int = Query(1, ge=1), tamano: int = Query(25, ge=1, le=200)):
-    df = filtrar(datos(conjunto), departamento, modalidad, solo_alertas, buscar)
+    df = ordenar(filtrar(datos(conjunto), departamento, modalidad, solo_alertas, buscar), orden)
     total = len(df)
     bloque = df.iloc[(pagina - 1) * tamano: pagina * tamano]
     cols = [c for c in COLUMNAS_LISTA if c in bloque.columns]
@@ -176,7 +192,7 @@ def alertas(conjunto: str = "vigentes", departamento: Optional[str] = None, moda
 @app.get("/api/proceso/{id_del_proceso}")
 def proceso(id_del_proceso: str, conjunto: str = "vigentes"):
     df = datos(conjunto)
-    fila = df[df["id_del_proceso"] == id_del_proceso]
+    fila = ordenar(df[df["id_del_proceso"] == id_del_proceso])
     if fila.empty:
         raise HTTPException(404, "Proceso no encontrado")
     return _limpio(fila)[0]
@@ -184,8 +200,8 @@ def proceso(id_del_proceso: str, conjunto: str = "vigentes"):
 
 @app.get("/api/descargar")
 def descargar(conjunto: str = "vigentes", departamento: Optional[str] = None, modalidad: Optional[str] = None,
-              solo_alertas: bool = False, buscar: Optional[str] = None):
-    df = filtrar(datos(conjunto), departamento, modalidad, solo_alertas, buscar)
+              solo_alertas: bool = False, buscar: Optional[str] = None, orden: Orden = "prioridad"):
+    df = ordenar(filtrar(datos(conjunto), departamento, modalidad, solo_alertas, buscar), orden)
 
     def bloques(tamano=5000):
         # Se envía por bloques para no materializar el archivo completo en memoria

@@ -62,3 +62,21 @@ def test_simulador_valida_entradas():
 def test_descarga_csv():
     r = cliente.get("/api/descargar", params={"conjunto": "vigentes", "solo_alertas": True})
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
+
+
+@pytest.mark.parametrize("orden,columna", [("riesgo", "riesgo_pct"), ("precio", "precio_base"), ("monto", "monto_en_juego")])
+def test_orden_alternativo(orden, columna):
+    """Reordenar la vista no cambia el modelo: la prioridad frente a pares se conserva en cada fila."""
+    datos = cliente.get("/api/alertas", params={"conjunto": "2026", "orden": orden, "tamano": 50}).json()["registros"]
+    valores = [x[columna] for x in datos if x[columna] is not None]
+    assert valores == sorted(valores, reverse=True)
+    por_defecto = {x["id_del_proceso"]: x["prioridad"]
+                   for x in cliente.get("/api/alertas", params={"conjunto": "2026", "tamano": 200}).json()["registros"]}
+    assert all(por_defecto.get(x["id_del_proceso"], x["prioridad"]) == x["prioridad"] for x in datos)
+    for x in datos:
+        if x["precio_base"] is not None:
+            assert x["monto_en_juego"] == pytest.approx(x["riesgo_pct"] / 100 * x["precio_base"], abs=1)
+
+
+def test_orden_invalido():
+    assert cliente.get("/api/alertas", params={"orden": "robado"}).status_code == 422

@@ -20,6 +20,8 @@ function parametros() {
   if (mod) p.set("modalidad", mod);
   if (q) p.set("buscar", q);
   if ($("#f-alertas").checked) p.set("solo_alertas", "true");
+  const orden = $("#f-orden").value;
+  if (orden !== "prioridad") p.set("orden", orden);
   return p;
 }
 
@@ -62,8 +64,8 @@ function pintarKpis(datos) {
       [e.semana || "—", `semana · ejecutado el ${e.fecha_ejecucion || "—"}`],
       [fmt.format(datos.total), "procesos con los filtros actuales"],
     ];
-    $("#explicacion-lista").textContent = "Procesos competitivos publicados en los últimos 7 días que siguen sin adjudicar, " +
-      "ordenados por riesgo relativo a procesos comparables. La marca vertical de cada barra es el riesgo esperado de los pares.";
+    $("#explicacion-lista").textContent = "Procesos competitivos publicados en los últimos 7 días que siguen sin adjudicar. " +
+      TEXTO_ORDEN[$("#f-orden").value] + " La marca vertical de cada barra es el riesgo esperado de los pares.";
   } else {
     const m = r.modelo.metricas_prueba_2026 || {};
     tarjetas = [
@@ -78,6 +80,14 @@ function pintarKpis(datos) {
   $("#kpis").innerHTML = tarjetas.map(([v, t]) => `<div class="kpi"><div class="valor">${esc(v)}</div><div class="etiqueta">${esc(t)}</div></div>`).join("");
 }
 
+// Qué significa cada orden (la columna # conserva la prioridad frente a pares)
+const TEXTO_ORDEN = {
+  prioridad: "Ordenados por riesgo relativo a procesos comparables (mismo segmento, modalidad, cuantía y tamaño de mercado).",
+  riesgo: "Ordenados por la probabilidad calibrada de recibir una sola oferta.",
+  precio: "Ordenados por precio base, de mayor a menor.",
+  monto: "Ordenados por monto en juego: probabilidad de una sola oferta × precio base. Favorece a las entidades grandes.",
+};
+
 function barra(riesgo, pares) {
   return `<span class="cifra">${pct(riesgo)}</span>
     <div class="barra" title="Riesgo ${pct(riesgo)} · pares ${pct(pares)}">
@@ -89,7 +99,9 @@ async function cargarLista() {
   estado.total = datos.total;
   pintarKpis(datos);
   const conResultado = estado.vista === "2026";
-  $("#encabezado").innerHTML = ["#", "Entidad y lugar", "Objeto", "Modalidad", "Riesgo", "Pares", conResultado ? "Resultado" : "Estado"]
+  const verMonto = $("#f-orden").value === "monto";
+  $("#encabezado").innerHTML = ["#", "Entidad y lugar", "Objeto", "Modalidad", verMonto ? "Monto en juego" : "Precio base", "Riesgo", "Pares",
+                                conResultado ? "Resultado" : "Estado"]
     .map((t) => `<th>${t}</th>`).join("");
   $("#filas").innerHTML = datos.registros.map((r) => `
     <tr data-id="${esc(r.id_del_proceso)}" tabindex="0">
@@ -98,11 +110,12 @@ async function cargarLista() {
           <div class="lugar">${esc(r.municipio)} · ${esc(r.departamento)}</div></td>
       <td><div class="objeto-corto">${esc((r.objeto || "").slice(0, 110))}${(r.objeto || "").length > 110 ? "…" : ""}</div></td>
       <td class="lugar">${esc(r.modalidad)}</td>
+      <td class="cifra">${dinero(verMonto ? r.monto_en_juego : r.precio_base)}</td>
       <td>${barra(r.riesgo_pct, r.riesgo_pares_pct)}</td>
       <td class="cifra">${pct(r.riesgo_pares_pct)}</td>
       <td>${conResultado ? `<span class="${r.resultado_observado === "1 oferta" ? "resultado-1" : "resultado-2"}">${esc(r.resultado_observado)}</span>`
                          : `<span class="lugar">${esc(r.estado || "")}</span>`}</td>
-    </tr>`).join("") || `<tr><td colspan="7" class="tenue">No hay procesos con estos filtros.</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="8" class="tenue">No hay procesos con estos filtros.</td></tr>`;
   const paginas = Math.max(1, Math.ceil(datos.total / estado.tamano));
   $("#pagina-info").textContent = `Página ${estado.pagina} de ${fmt.format(paginas)}`;
   $("#anterior").disabled = estado.pagina <= 1;
@@ -112,7 +125,7 @@ async function cargarLista() {
 }
 
 let espera;
-["#f-departamento", "#f-modalidad", "#f-alertas"].forEach((id) => $(id).addEventListener("change", () => { estado.pagina = 1; cargarLista(); }));
+["#f-departamento", "#f-modalidad", "#f-orden", "#f-alertas"].forEach((id) => $(id).addEventListener("change", () => { estado.pagina = 1; cargarLista(); }));
 $("#f-buscar").addEventListener("input", () => { clearTimeout(espera); espera = setTimeout(() => { estado.pagina = 1; cargarLista(); }, 300); });
 $("#anterior").addEventListener("click", () => { estado.pagina--; cargarLista(); });
 $("#siguiente").addEventListener("click", () => { estado.pagina++; cargarLista(); });
@@ -143,6 +156,7 @@ function htmlFicha(p) {
     <h3>Objeto</h3><p>${esc(p.objeto)}</p>
     <dl class="datos">
       <dt>Precio base</dt><dd>${dinero(p.precio_base)}</dd>
+      <dt>Monto en juego</dt><dd>${dinero(p.monto_en_juego)} <span class="tenue">(riesgo × precio base)</span></dd>
       <dt>Días para ofertar</dt><dd>${p.dias_para_ofertar ?? "sin dato"}</dd>
       <dt>Publicación</dt><dd>${esc(p.fecha_publicacion)}</dd>
       ${p.fecha_cierre_ofertas ? `<dt>Cierre de ofertas</dt><dd>${esc(p.fecha_cierre_ofertas)}</dd>` : ""}
