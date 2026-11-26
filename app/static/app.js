@@ -20,6 +20,7 @@ function parametros() {
   if (mod) p.set("modalidad", mod);
   if (q) p.set("buscar", q);
   if ($("#f-alertas").checked) p.set("solo_alertas", "true");
+  if (estado.vista === "vigentes" && $("#f-nuevos").checked) p.set("solo_nuevos", "true");
   const orden = $("#f-orden").value;
   if (orden !== "prioridad") p.set("orden", orden);
   return p;
@@ -35,6 +36,7 @@ function cambiarVista(vista) {
   $("#vista-lista").hidden = !lista;
   $("#vista-simulador").hidden = vista !== "simulador";
   $("#vista-como").hidden = vista !== "como";
+  $("#casilla-nuevos").hidden = vista !== "vigentes";
   if (lista) {
     estado.vista = vista;
     estado.pagina = 1;
@@ -59,12 +61,13 @@ function pintarKpis(datos) {
   if (estado.vista === "vigentes") {
     const e = r.ejecucion || {};
     tarjetas = [
-      [fmt.format(r.vigentes.procesos), "procesos abiertos puntuados"],
+      [fmt.format(r.vigentes.procesos), "procesos que siguen recibiendo ofertas"],
       [fmt.format(r.vigentes.alertas), "alertas (alta precisión)"],
-      [e.semana || "—", `semana · ejecutado el ${e.fecha_ejecucion || "—"}`],
+      [r.vigentes.nuevos == null ? "—" : fmt.format(r.vigentes.nuevos),
+       r.vigentes.alertas_nuevas == null ? "nuevos hoy" : `nuevos hoy · ${fmt.format(r.vigentes.alertas_nuevas)} con alerta`],
       [fmt.format(datos.total), "procesos con los filtros actuales"],
     ];
-    $("#explicacion-lista").textContent = "Procesos competitivos publicados en los últimos 7 días que siguen sin adjudicar. " +
+    $("#explicacion-lista").textContent = `Procesos competitivos sin adjudicar cuyo plazo para ofertar sigue abierto (actualizado el ${e.fecha_ejecucion || "—"}). ` +
       TEXTO_ORDEN[$("#f-orden").value] + " La marca vertical de cada barra es el riesgo esperado de los pares.";
   } else {
     const m = r.modelo.metricas_prueba_2026 || {};
@@ -106,7 +109,7 @@ async function cargarLista() {
   $("#filas").innerHTML = datos.registros.map((r) => `
     <tr data-id="${esc(r.id_del_proceso)}" tabindex="0">
       <td class="num">${r.prioridad}</td>
-      <td><div class="entidad">${esc(r.entidad)}${r.alerta ? '<span class="etiqueta-alerta">alerta</span>' : ""}</div>
+      <td><div class="entidad">${esc(r.entidad)}${r.alerta ? '<span class="etiqueta-alerta">alerta</span>' : ""}${r.nuevo ? '<span class="etiqueta-nuevo">nuevo</span>' : ""}</div>
           <div class="lugar">${esc(r.municipio)} · ${esc(r.departamento)}</div></td>
       <td><div class="objeto-corto">${esc((r.objeto || "").slice(0, 110))}${(r.objeto || "").length > 110 ? "…" : ""}</div></td>
       <td class="lugar">${esc(r.modalidad)}</td>
@@ -125,7 +128,7 @@ async function cargarLista() {
 }
 
 let espera;
-["#f-departamento", "#f-modalidad", "#f-orden", "#f-alertas"].forEach((id) => $(id).addEventListener("change", () => { estado.pagina = 1; cargarLista(); }));
+["#f-departamento", "#f-modalidad", "#f-orden", "#f-alertas", "#f-nuevos"].forEach((id) => $(id).addEventListener("change", () => { estado.pagina = 1; cargarLista(); }));
 $("#f-buscar").addEventListener("input", () => { clearTimeout(espera); espera = setTimeout(() => { estado.pagina = 1; cargarLista(); }, 300); });
 $("#anterior").addEventListener("click", () => { estado.pagina--; cargarLista(); });
 $("#siguiente").addEventListener("click", () => { estado.pagina++; cargarLista(); });
@@ -160,6 +163,7 @@ function htmlFicha(p) {
       <dt>Días para ofertar</dt><dd>${p.dias_para_ofertar ?? "sin dato"}</dd>
       <dt>Publicación</dt><dd>${esc(p.fecha_publicacion)}</dd>
       ${p.fecha_cierre_ofertas ? `<dt>Cierre de ofertas</dt><dd>${esc(p.fecha_cierre_ofertas)}</dd>` : ""}
+      ${p.fecha_ingreso_lista ? `<dt>En la lista desde</dt><dd>${esc(p.fecha_ingreso_lista)}${p.nuevo ? " (nuevo hoy)" : ""}</dd>` : ""}
       ${p.tipo_contrato ? `<dt>Tipo de contrato</dt><dd>${esc(p.tipo_contrato)}</dd>` : ""}
     </dl>
     ${p.url ? `<a class="boton" href="${esc(p.url)}" target="_blank" rel="noopener">Ver el proceso en SECOP II</a>` : ""}

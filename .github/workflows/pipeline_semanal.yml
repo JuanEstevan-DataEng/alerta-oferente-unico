@@ -1,10 +1,10 @@
-# Ejecución semanal del pipeline medallón (bronze -> silver con Spark -> gold).
+# Ejecución diaria del pipeline medallón (bronze -> silver con Spark -> gold).
 # Secretos del repositorio: HF_TOKEN (escritura en Hugging Face). Variable: HF_DATASET.
-name: Pipeline semanal SECOP II
+name: Pipeline diario SECOP II
 
 on:
   schedule:
-    - cron: "0 11 * * 1"   # lunes 06:00 hora de Colombia
+    - cron: "0 11 * * *"   # todos los días a las 06:00 hora de Colombia
   workflow_dispatch:
 
 jobs:

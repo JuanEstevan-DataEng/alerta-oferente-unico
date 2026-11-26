@@ -6,7 +6,7 @@ ingesta, en formato Parquet:
     lakehouse/bronze/publicados/fecha_ingesta=AAAA-MM-DD/desde_X_hasta_Y.parquet   procesos publicados
     lakehouse/bronze/adjudicados/fecha_ingesta=AAAA-MM-DD/desde_X_hasta_Y.parquet  procesos adjudicados
 
-Un archivo por consulta: dos ingestas el mismo día (p. ej. una recuperación y la semanal) no se
+Un archivo por consulta: dos ingestas el mismo día (p. ej. una recuperación y la diaria) no se
 sobrescriben. Si un proceso aparece en varias, silver conserva la versión de la ingesta más reciente.
 
 Los publicados son los que se puntúan; los adjudicados actualizan el historial de las entidades.

@@ -80,6 +80,8 @@ input, select, textarea { font: inherit; color: var(--texto); background: var(--
 .objeto-corto { max-width: 420px; }
 .etiqueta-alerta { display: inline-block; font-size: .72rem; padding: 1px 8px; border-radius: 999px;
   background: var(--riesgo); color: #fff; margin-left: 6px; vertical-align: 1px; }
+.etiqueta-nuevo { display: inline-block; font-size: .72rem; padding: 1px 8px; border-radius: 999px;
+  background: var(--acento); color: var(--sobre-acento); margin-left: 6px; vertical-align: 1px; }
 .resultado-1 { color: var(--riesgo); font-weight: 600; } .resultado-2 { color: var(--ok); }
 
 .barra { position: relative; height: 8px; width: 120px; background: var(--borde); border-radius: 4px; margin-top: 4px; }

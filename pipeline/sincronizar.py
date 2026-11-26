@@ -1,7 +1,7 @@
 """Sincroniza el lakehouse local con un repositorio de datos de Hugging Face (almacenamiento de objetos).
 
 El repositorio de datos cumple el papel de MinIO/S3 en una arquitectura lakehouse: el pipeline
-semanal (GitHub Actions) descarga bronze y estado, procesa y sube las capas actualizadas; la
+diario (GitHub Actions) descarga bronze y estado, procesa y sube las capas actualizadas; la
 aplicación web solo descarga gold y estado.
 
     python pipeline/sincronizar.py descargar --capas bronze estado
@@ -23,7 +23,7 @@ def descargar(repo, lakehouse, capas):
                       allow_patterns=[f"{c}/**" for c in capas], token=os.environ.get("HF_TOKEN"))
 
 
-def subir(repo, lakehouse, capas, mensaje="Actualización semanal del lakehouse"):
+def subir(repo, lakehouse, capas, mensaje="Actualización diaria del lakehouse"):
     api = HfApi(token=os.environ.get("HF_TOKEN"))
     api.create_repo(repo, repo_type="dataset", private=False, exist_ok=True)
     # Espejo de cada capa: lo que ya no existe en local se elimina del repositorio en el mismo commit

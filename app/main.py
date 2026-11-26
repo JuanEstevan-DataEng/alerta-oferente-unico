@@ -2,7 +2,7 @@
 
     uvicorn app.main:app --port 8000          (desde la carpeta despliegue/)
 
-Lee la capa gold del lakehouse (alertas de la semana), la evaluación de 2026 y la validación
+Lee la capa gold del lakehouse (alertas vigentes, actualizadas cada día), la evaluación de 2026 y la validación
 prospectiva, y expone el modelo para puntuar un proceso hipotético (simulador).
 Variables de entorno: LAKEHOUSE (carpeta del lakehouse) y ARTEFACTOS (carpeta de artefactos).
 """
@@ -35,7 +35,7 @@ INTERVALO_SINCRONIZACION_S = 3600
 
 
 async def _sincronizar_periodicamente():
-    # La aplicación solo lee: descarga las capas gold y estado que publica el pipeline semanal
+    # La aplicación solo lee: descarga las capas gold y estado que publica el pipeline diario
     import asyncio
 
     from pipeline.sincronizar import descargar
@@ -69,7 +69,8 @@ app = FastAPI(title="Alerta temprana de oferente único — SECOP II",
 
 CONJUNTOS = {"vigentes": "alertas_vigentes.parquet", "2026": "evaluacion_2026.parquet"}
 COLUMNAS_LISTA = ["prioridad", "id_del_proceso", "fecha_publicacion", "entidad", "departamento", "municipio",
-                  "modalidad", "objeto", "precio_base", "monto_en_juego", "riesgo_pct", "riesgo_pares_pct", "alerta",
+                  "modalidad", "objeto", "precio_base", "monto_en_juego", "fecha_cierre_ofertas", "nuevo",
+                  "fecha_ingreso_lista", "riesgo_pct", "riesgo_pares_pct", "alerta",
                   "resultado_observado", "estado", "url"]
 
 # Criterios de orden de la lista. El modelo y la columna «prioridad» no cambian: solo se reordena la vista.
@@ -126,13 +127,15 @@ def ordenar(df, orden="prioridad"):
     return df.sort_values([COLUMNA_ORDEN[orden], "prioridad"], ascending=[False, True], na_position="last", kind="stable")
 
 
-def filtrar(df, departamento, modalidad, solo_alertas, buscar):
+def filtrar(df, departamento, modalidad, solo_alertas, buscar, solo_nuevos=False):
     if departamento:
         df = df[df["departamento"] == departamento]
     if modalidad:
         df = df[df["modalidad"] == modalidad]
     if solo_alertas:
         df = df[df["alerta"]]
+    if solo_nuevos and "nuevo" in df.columns:
+        df = df[df["nuevo"]]
     if buscar:
         patron = buscar.strip().lower()
         df = df[df["entidad"].str.lower().str.contains(patron, regex=False)
@@ -156,7 +159,9 @@ def resumen():
     top100 = (ev.head(100)["resultado_observado"] == "1 oferta").mean() if len(ev) else None
     return {
         "ejecucion": ejec,
-        "vigentes": {"procesos": len(vig), "alertas": int(vig["alerta"].sum()) if len(vig) else 0},
+        "vigentes": {"procesos": len(vig), "alertas": int(vig["alerta"].sum()) if len(vig) else 0,
+                     "nuevos": int(vig["nuevo"].sum()) if "nuevo" in vig else None,
+                     "alertas_nuevas": int((vig["nuevo"] & vig["alerta"]).sum()) if "nuevo" in vig else None},
         "modelo": {"nombre": meta.get("modelo"), "fecha_corte_datos": meta.get("fecha_corte_datos"),
                    "metricas_prueba_2026": meta.get("metricas_prueba_2026"),
                    "puntos_operacion": meta.get("puntos_operacion_prueba_2026"),
@@ -178,8 +183,8 @@ def filtros(conjunto: str = "vigentes"):
 @app.get("/api/alertas")
 def alertas(conjunto: str = "vigentes", departamento: Optional[str] = None, modalidad: Optional[str] = None,
             solo_alertas: bool = False, buscar: Optional[str] = None, orden: Orden = "prioridad",
-            pagina: int = Query(1, ge=1), tamano: int = Query(25, ge=1, le=200)):
-    df = ordenar(filtrar(datos(conjunto), departamento, modalidad, solo_alertas, buscar), orden)
+            solo_nuevos: bool = False, pagina: int = Query(1, ge=1), tamano: int = Query(25, ge=1, le=200)):
+    df = ordenar(filtrar(datos(conjunto), departamento, modalidad, solo_alertas, buscar, solo_nuevos), orden)
     total = len(df)
     bloque = df.iloc[(pagina - 1) * tamano: pagina * tamano]
     cols = [c for c in COLUMNAS_LISTA if c in bloque.columns]
@@ -200,8 +205,9 @@ def proceso(id_del_proceso: str, conjunto: str = "vigentes"):
 
 @app.get("/api/descargar")
 def descargar(conjunto: str = "vigentes", departamento: Optional[str] = None, modalidad: Optional[str] = None,
-              solo_alertas: bool = False, buscar: Optional[str] = None, orden: Orden = "prioridad"):
-    df = ordenar(filtrar(datos(conjunto), departamento, modalidad, solo_alertas, buscar), orden)
+              solo_alertas: bool = False, buscar: Optional[str] = None, orden: Orden = "prioridad",
+              solo_nuevos: bool = False):
+    df = ordenar(filtrar(datos(conjunto), departamento, modalidad, solo_alertas, buscar, solo_nuevos), orden)
 
     def bloques(tamano=5000):
         # Se envía por bloques para no materializar el archivo completo en memoria

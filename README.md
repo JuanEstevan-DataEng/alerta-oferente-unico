@@ -1,6 +1,6 @@
 # Alerta temprana de oferente único — despliegue
 
-Sistema que prioriza, cada semana, los procesos de contratación pública recién publicados en SECOP II
+Sistema que prioriza, cada día, los procesos de contratación pública de SECOP II que siguen recibiendo ofertas
 según su probabilidad de recibir **una sola oferta**, con la explicación de cada alerta.
 *Priorizar, no señalar:* el riesgo de oferente único no es evidencia de corrupción.
 
@@ -16,11 +16,11 @@ Curso Inteligencia Artificial (535212), UAO, 2026-2S · Dilian Mayerly Madroñer
 | Componente | Archivo | Qué hace |
 |---|---|---|
 | Entrenamiento | `entregable_3_IA.ipynb` (Colab, GPU T4) | Selecciona el modelo (E4) y exporta `artefactos/` |
-| Bronze | `pipeline/ingesta.py` | Consulta procesos publicados y adjudicados de la semana |
+| Bronze | `pipeline/ingesta.py` | Consulta procesos publicados y adjudicados de los últimos 14 días |
 | Silver | `pipeline/medallon_spark.py` | PySpark: deduplicación, última versión, variables derivadas |
 | Estado | `oferente_unico/puntuacion.py` | Suma al historial de cada entidad los adjudicados nuevos (sin reentrenar) |
 | Gold | `oferente_unico/puntuacion.py` | Puntaje, calibración, riesgo de pares, factores SHAP (TreeSHAP nativo de LightGBM) |
-| Orquestación | `pipeline/ejecutar_semana.py`, `.github/workflows/pipeline_semanal.yml`, `pipeline/dags/` | Ejecución semanal (GitHub Actions o Airflow) |
+| Orquestación | `pipeline/ejecutar_semana.py`, `.github/workflows/pipeline_semanal.yml`, `pipeline/dags/` | Ejecución diaria (GitHub Actions o Airflow) |
 | Lakehouse remoto | `pipeline/sincronizar.py` | Repositorio de datos de Hugging Face como almacenamiento de objetos |
 | Hosting | `Dockerfile`, `render.yaml` | Render (Docker, plan gratuito): descarga gold y estado al arrancar y cada hora |
 | Aplicación | `app/` | API FastAPI y página web: lista, ficha, evaluación 2026, simulador |
@@ -33,7 +33,7 @@ uv venv .venv --python 3.12 && uv pip install --python .venv/bin/python -r requi
 HF_DATASET=JuanEstevan-DataEng/secop-oferente-unico-lakehouse .venv/bin/python pipeline/sincronizar.py descargar --capas bronze gold estado
 # Opción B: construirlo desde cero (recupera desde el corte de los datos de entrenamiento)
 .venv/bin/python pipeline/ejecutar_semana.py --desde 2026-09-17
-.venv/bin/python pipeline/ejecutar_semana.py                      # semanas siguientes
+.venv/bin/python pipeline/ejecutar_semana.py                      # días siguientes
 .venv/bin/python pipeline/validacion_prospectiva.py
 .venv/bin/uvicorn app.main:app --port 8000                        # http://localhost:8000
 ```
@@ -51,6 +51,6 @@ Con Docker: `docker compose up -d app` (≈ 330–430 MB de RAM; cabe en el plan
 
 ## Mantenimiento
 
-- **Cada semana:** ingesta, actualización del historial y nueva lista (automático).
+- **Cada día:** ingesta, actualización del historial y nueva lista con la marca «nuevo» para los procesos que entran hoy (automático). La ejecución era semanal, pero el 38 % de la lista semanal ya había cerrado la recepción de ofertas.
 - **Cada mes:** revisar la validación prospectiva; si la calibración se desvía (probabilidad media frente a tasa real), reajustar el calibrador con las semanas cuyo resultado ya se conoce.
 - **Cada año:** reentrenar en Colab con el año completo más reciente y reemplazar `artefactos/` (mismas versiones de scikit-learn y LightGBM que registre `metadatos.json`).

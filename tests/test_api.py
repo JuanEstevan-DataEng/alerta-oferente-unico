@@ -80,3 +80,13 @@ def test_orden_alternativo(orden, columna):
 
 def test_orden_invalido():
     assert cliente.get("/api/alertas", params={"orden": "robado"}).status_code == 422
+
+
+def test_solo_nuevos():
+    """La lista vigente marca los procesos que entraron hoy y permite filtrarlos."""
+    todos = cliente.get("/api/alertas", params={"tamano": 200}).json()
+    if not todos["registros"] or "nuevo" not in todos["registros"][0]:
+        pytest.skip("gold anterior a la marca de nuevos")
+    nuevos = cliente.get("/api/alertas", params={"solo_nuevos": True, "tamano": 200}).json()
+    assert nuevos["total"] <= todos["total"]
+    assert all(x["nuevo"] for x in nuevos["registros"])

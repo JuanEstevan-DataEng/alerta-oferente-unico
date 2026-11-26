@@ -17,7 +17,7 @@
     </div>
   </div>
   <nav class="pestanas" role="tablist">
-    <button role="tab" data-vista="vigentes" aria-selected="true">Alertas de la semana</button>
+    <button role="tab" data-vista="vigentes" aria-selected="true">Alertas vigentes</button>
     <button role="tab" data-vista="2026">Evaluación 2026</button>
     <button role="tab" data-vista="simulador">Simulador</button>
     <button role="tab" data-vista="como">Cómo funciona</button>
@@ -47,6 +47,7 @@
         </select>
       </label>
       <label class="casilla"><input type="checkbox" id="f-alertas"> Solo alertas</label>
+      <label class="casilla" id="casilla-nuevos"><input type="checkbox" id="f-nuevos"> Solo nuevos de hoy</label>
       <a class="boton secundario" id="descargar" href="#">Descargar CSV</a>
     </form>
     <div class="tabla-envoltura">
@@ -120,7 +121,7 @@
         <div class="flecha" aria-hidden="true">→</div>
         <div class="etapa app"><b>FastAPI + web</b><span>lista priorizada, ficha explicada, simulador</span></div>
       </div>
-      <p class="tenue">El modelo se entrena una vez al año en Google Colab (GPU T4) y exporta sus artefactos. Cada semana el pipeline
+      <p class="tenue">El modelo se entrena una vez al año en Google Colab (GPU T4) y exporta sus artefactos. Cada día el pipeline
         consulta los procesos publicados y adjudicados, actualiza el historial de cada entidad con los resultados nuevos (sin reentrenar)
         y puntúa los procesos que siguen recibiendo ofertas.</p>
     </div>
