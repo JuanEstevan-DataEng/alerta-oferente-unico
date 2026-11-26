@@ -121,8 +121,10 @@ def _leer(nombre, firma):
     # Una sola métrica para el usuario: tiene alerta todo proceso cuyo riesgo mostrado alcance el umbral
     # (la evaluación 2026 viene del notebook, que aplicaba el umbral a la probabilidad sin calibrar)
     df["alerta"] = df["riesgo_pct"] >= umbral_riesgo_pct()
-    df["_texto"] = normalizar(df["entidad"] + " | " + df["municipio"].fillna("") + " | " + df["objeto"].fillna(""))
-    df["_municipio"] = normalizar(df["municipio"])
+    # Texto normalizado en un arreglo de Arrow (un solo búfer): cabe en los 512 MB del plan gratuito
+    df["_texto"] = pd.array([_normalizar_texto(" | ".join(str(v) for v in fila if isinstance(v, str)))
+                             for fila in zip(df["entidad"], df["municipio"], df["objeto"])], dtype="string[pyarrow]")
+    df["_municipio"] = df["municipio"].fillna("").map(_normalizar_texto).astype("category")
     return df
 
 
@@ -169,7 +171,7 @@ def filtrar(df, departamento, modalidad, solo_alertas, buscar, solo_nuevos=False
     if municipio and _normalizar_texto(municipio):
         # Igual al municipio, o el municipio como palabra completa dentro de lo escrito («Santiago de Cali» → Cali)
         q = _normalizar_texto(municipio)
-        validos = {m for m in df["_municipio"].unique()
+        validos = {m for m in df["_municipio"].astype(str).unique()
                    if m == q or (m and m != "no definido" and re.search(rf"(?<!\w){re.escape(m)}(?!\w)", q))}
         df = df[df["_municipio"].isin(validos)]
     if modalidad:
@@ -180,8 +182,9 @@ def filtrar(df, departamento, modalidad, solo_alertas, buscar, solo_nuevos=False
         df = df[df["nuevo"]]
     if buscar and _normalizar_texto(buscar):
         # Palabra o frase completa: «cali» ya no encuentra «calidad», «localizado» ni «Calima»
-        patron = rf"(?<!\w){re.escape(_normalizar_texto(buscar))}(?!\w)"
-        df = df[df["_texto"].str.contains(patron, regex=True)]
+        # \b en texto ya sin tildes (ASCII); Arrow usa RE2, que no admite búsquedas hacia atrás
+        patron = r"\b" + re.escape(_normalizar_texto(buscar)).replace("\\ ", " ") + r"\b"
+        df = df[df["_texto"].str.contains(patron, regex=True).fillna(False).astype(bool)]
     return df
 
 
