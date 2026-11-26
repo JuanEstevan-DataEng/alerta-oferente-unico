@@ -3,7 +3,7 @@
 Reproduce las secciones 3, 5, 7, 8 y 9 del notebook del Entregable III a partir de los artefactos
 exportados en su sección 10, sin volver a leer los 400 000 procesos del entrenamiento.
 
-Estado que evoluciona cada semana (carpeta `estado/`):
+Estado que evoluciona en cada ejecución diaria (carpeta `estado/`):
     historial_entidad.parquet           n procesos adjudicados y s con oferente único por entidad
     historial_entidad_segmento.parquet  lo mismo por entidad y segmento UNSPSC
     publicaciones.parquet               publicaciones recientes (entidad, municipio, fecha) para el

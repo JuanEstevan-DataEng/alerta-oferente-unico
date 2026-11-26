@@ -1,6 +1,6 @@
 # Ejecución local del despliegue.
 #   docker compose up -d app                        # solo la aplicación (≈ 300 MB de RAM)
-#   docker compose --profile pipeline run --rm pipeline   # ejecución semanal con Spark
+#   docker compose --profile pipeline run --rm pipeline   # ejecución diaria con Spark
 services:
   app:
     build: .
