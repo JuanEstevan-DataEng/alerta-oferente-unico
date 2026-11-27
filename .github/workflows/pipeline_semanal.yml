@@ -4,7 +4,8 @@ name: Pipeline diario SECOP II
 
 on:
   schedule:
-    - cron: "0 11 * * *"   # todos los días a las 06:00 hora de Colombia
+    - cron: "23 11 * * *"   # 06:23 hora de Colombia (minuto fuera de la hora en punto: GitHub omite menos)
+    - cron: "23 19 * * *"   # 14:23 hora de Colombia: recoge la actualización de datos.gov.co si llega tarde
   workflow_dispatch:
 
 jobs:
